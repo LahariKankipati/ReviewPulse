@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Secrets — the spec will skim your repo; a leaked .env is an instant red flag
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.log

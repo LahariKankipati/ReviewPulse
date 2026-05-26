@@ -1,0 +1,34 @@
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# --- Database (async) ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0            # async Postgres driver
+psycopg2-binary==2.9.10    # sync driver, used by Alembic migrations
+alembic==1.14.0
+pgvector==0.3.6            # SQLAlchemy type for the `vector` column
+
+# --- Async jobs ---
+celery==5.4.0
+redis==5.2.1
+
+# --- LLM providers (provider-agnostic adapter sits on top of these) ---
+anthropic==0.42.0
+google-generativeai==0.8.3
+
+# --- Auth (verify Supabase JWTs) ---
+pyjwt[crypto]==2.10.1
+
+# --- Utilities ---
+httpx==0.28.1
+tenacity==9.0.0            # retry + exponential backoff
+python-json-logger==3.2.1 # structured JSON logs
+numpy==2.2.1              # cosine math in tests / fallbacks
+
+# --- Tests ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+aiosqlite==0.20.0         # lets tests run on an in-memory DB, no Postgres needed

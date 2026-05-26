@@ -1,0 +1,37 @@
+# Render Blueprint — deploys the API now (Phase 0) and the worker later (Phase 4).
+# On Render: New > Blueprint > point at this repo. Set the secret env vars in the dashboard.
+services:
+  - type: web
+    name: reviewpulse-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false        # set in dashboard (Supabase connection string, asyncpg form)
+      - key: REDIS_URL
+        sync: false        # Upstash redis URL
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false        # your Vercel frontend URL
+      - key: WEBHOOK_SECRET
+        sync: false
+
+  # Uncomment once Phase 4 lands the Celery worker:
+  # - type: worker
+  #   name: reviewpulse-worker
+  #   runtime: python
+  #   rootDir: backend
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+  #   envVars:
+  #     - fromGroup: reviewpulse-api   # reuse the same env vars
