@@ -1,10 +1,11 @@
-"""Phase 0 smoke test: the app boots and /health responds. If this breaks, deploy is broken."""
+"""Health endpoint smoke test."""
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
 def test_health_ok():
+    """Ensure API starts and exposes expected health payload keys."""
     client = TestClient(app)
     resp = client.get("/health")
     assert resp.status_code == 200
