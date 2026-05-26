@@ -51,6 +51,10 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=50)
 
 
+class LoginRequest(BaseModel):
+    email: str
+
+
 def _build_synthetic_reviews(count: int) -> list[IngestReviewInput]:
     if count <= 0:
         return []
@@ -70,7 +74,7 @@ def _build_synthetic_reviews(count: int) -> list[IngestReviewInput]:
                 rating=random.choice([1, 2, 3, 4, 5]),
                 title=f"Synthetic review {i}",
                 body=random.choice(snippets),
-                review_date=now - timedelta(days=random.randint(0, 120)),
+                review_date=now - timedelta(hours=random.randint(0, 72)),
                 source="synthetic",
             )
         )
@@ -93,11 +97,52 @@ async def create_author(payload: AuthorCreateRequest, db: AsyncSession = Depends
     if existing is not None:
         raise HTTPException(status_code=409, detail="Author with auth_user_id already exists")
 
-    author = Author(auth_user_id=payload.auth_user_id, email=str(payload.email), name=payload.name)
+    author = Author(
+        auth_user_id=payload.auth_user_id,
+        email=str(payload.email),
+        name=payload.name,
+        current_login_at=datetime.now(timezone.utc),
+    )
     db.add(author)
     await db.commit()
     await db.refresh(author)
-    return {"id": author.id, "auth_user_id": author.auth_user_id, "email": author.email, "name": author.name}
+    return {
+        "id": author.id,
+        "auth_user_id": author.auth_user_id,
+        "email": author.email,
+        "name": author.name,
+        "last_login_at": author.last_login_at,
+        "current_login_at": author.current_login_at,
+    }
+
+
+@router.post("/auth/login")
+async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    author = await db.scalar(select(Author).where(Author.email == payload.email))
+    if author is None:
+        raise HTTPException(status_code=404, detail="No account found with this email. Please register first.")
+    prev = author.current_login_at
+    author.last_login_at = prev
+    author.current_login_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(author)
+    return {
+        "id": author.id,
+        "auth_user_id": author.auth_user_id,
+        "email": author.email,
+        "name": author.name,
+        "last_login_at": author.last_login_at,
+        "current_login_at": author.current_login_at,
+    }
+
+
+@router.get("/authors/{author_id}/books")
+async def list_author_books(author_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Book).where(Book.author_id == author_id).order_by(Book.created_at))
+    books = result.scalars().all()
+    return {
+        "items": [{"id": b.id, "author_id": b.author_id, "title": b.title, "isbn": b.isbn} for b in books]
+    }
 
 
 @router.post("/authors/{author_id}/books")
@@ -230,6 +275,10 @@ async def list_reviews(
                     "summary": analysis.summary,
                     "actionable": analysis.actionable,
                     "actionability_reason": analysis.actionability_reason,
+                    "cost_usd": float(analysis.cost_usd),
+                    "tokens_in": analysis.tokens_in,
+                    "tokens_out": analysis.tokens_out,
+                    "model": analysis.model_name,
                 },
             }
         )
