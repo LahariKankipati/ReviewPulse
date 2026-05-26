@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import configure_logging, get_logger
+from app.routers import router as api_router
 
 settings = get_settings()
 configure_logging()
@@ -35,3 +36,6 @@ app.add_middleware(
 async def health():
     """Liveness endpoint used by Render health checks and frontend smoke tests."""
     return {"status": "ok", "service": "reviewpulse", "env": settings.environment}
+
+
+app.include_router(api_router)
