@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { deleteBook } from "../api/reviewpulse";
 import type { Book, ReviewItem } from "../types/domain";
 
 type SentFilter = "all" | "positive" | "mixed" | "negative";
@@ -7,7 +8,9 @@ type Props = {
   book: Book;
   reviews: ReviewItem[];
   loading: boolean;
+  authorId: string;
   onBack: () => void;
+  onDelete: (bookId: string) => void;
 };
 
 /* ── helpers ─────────────────────────── */
@@ -127,10 +130,22 @@ function ReviewCard({ review }: { review: ReviewItem }) {
 }
 
 /* ── Main ────────────────────────────── */
-export function BookPage({ book, reviews, loading, onBack }: Props) {
+export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }: Props) {
   const [sentFilter, setSentFilter] = useState<SentFilter>("all");
   const [actionableOnly, setActionableOnly] = useState(false);
   const [aiFlaggedOnly, setAiFlaggedOnly] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!confirm(`Remove "${book.title}" and all its reviews? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await deleteBook(book.id, authorId);
+      onDelete(book.id);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const rawAvg = avg(reviews);
   const trueR = avg(reviews, true);
@@ -151,7 +166,17 @@ export function BookPage({ book, reviews, loading, onBack }: Props) {
 
   return (
     <div className="page">
-      <button className="back-btn" onClick={onBack}>← My Books</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+        <button className="back-btn" onClick={onBack} style={{ margin: 0 }}>← My Books</button>
+        <button
+          className="btn btn-ghost"
+          onClick={handleDelete}
+          disabled={deleting}
+          style={{ fontSize: "0.82rem", color: "var(--red)", borderColor: "var(--red)", padding: "0.35rem 0.85rem" }}
+        >
+          {deleting ? "Removing…" : "Remove Book"}
+        </button>
+      </div>
 
       {/* Book header */}
       <div className="card" style={{ marginBottom: "1.5rem" }}>

@@ -165,6 +165,16 @@ async def add_book(author_id: str, payload: BookCreateRequest, db: AsyncSession 
     return {"id": book.id, "author_id": book.author_id, "title": book.title, "isbn": book.isbn}
 
 
+@router.delete("/books/{book_id}")
+async def delete_book(book_id: str, author_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    book = await db.scalar(select(Book).where(Book.id == book_id, Book.author_id == author_id))
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    await db.delete(book)
+    await db.commit()
+    return {"deleted": True}
+
+
 @router.post("/books/{book_id}/ingest")
 async def trigger_ingestion(
     book_id: str,

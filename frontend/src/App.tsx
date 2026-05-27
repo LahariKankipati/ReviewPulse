@@ -72,6 +72,12 @@ export default function App() {
     setSelectedBook(null);
   }
 
+  function handleDeleteBook(bookId: string) {
+    setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    setBookReviews((prev) => { const next = { ...prev }; delete next[bookId]; return next; });
+    setSelectedBook(null);
+  }
+
   function handleLogout() {
     localStorage.removeItem(SESSION_KEY);
     setSession(null);
@@ -159,7 +165,9 @@ export default function App() {
             book={selectedBook}
             reviews={bookReviews[selectedBook.id] ?? []}
             loading={loadingReviews}
+            authorId={session.id}
             onBack={() => setSelectedBook(null)}
+            onDelete={handleDeleteBook}
           />
         )}
 

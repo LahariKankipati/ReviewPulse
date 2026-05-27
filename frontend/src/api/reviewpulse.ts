@@ -41,6 +41,10 @@ export function getJob(jobId: string) {
   return request<Job>(`/api/jobs/${jobId}`);
 }
 
+export function deleteBook(bookId: string, authorId: string) {
+  return request<{ deleted: boolean }>(`/api/books/${bookId}?author_id=${authorId}`, { method: "DELETE" });
+}
+
 export function listBookReviews(bookId: string, authorId: string, pageSize = 80) {
   const params = new URLSearchParams({ author_id: authorId, page: "1", page_size: String(pageSize) });
   return request<{ items: ReviewItem[] }>(`/api/books/${bookId}/reviews?${params}`);
