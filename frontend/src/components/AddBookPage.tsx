@@ -9,6 +9,7 @@ type Props = {
 
 type Phase = "form" | "running" | "done";
 
+// Multi-step form that creates a book, triggers synthetic review ingestion, polls for completion, then loads results.
 export function AddBookPage({ session, onBookAdded }: Props) {
   const [title, setTitle] = useState("");
   const [isbn, setIsbn] = useState("");
@@ -18,6 +19,7 @@ export function AddBookPage({ session, onBookAdded }: Props) {
   const [addedBook, setAddedBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Creates the book, triggers ingestion, polls until complete, then calls onBookAdded with results.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;

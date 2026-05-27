@@ -12,6 +12,7 @@ settings = get_settings()
 
 
 def get_provider(name: str | None = None) -> LLMProvider:
+    """Resolve and return an LLM provider instance by name, defaulting to the configured provider."""
     selected = (name or settings.llm_provider).lower().strip()
     if selected == "groq":
         return GroqProvider()
@@ -21,6 +22,7 @@ def get_provider(name: str | None = None) -> LLMProvider:
 
 
 def analyze_review(*, review_title: str, review_body: str, provider_name: str | None = None) -> AnalyzeReviewResponse:
+    """Route a review through the configured LLM provider for sentiment, theme, and AI-flag analysis."""
     provider = get_provider(provider_name)
     response = provider.analyze_review(review_title=review_title, review_body=review_body)
     logger.info(
@@ -37,6 +39,7 @@ def analyze_review(*, review_title: str, review_body: str, provider_name: str | 
 
 
 def embed_text(*, text: str, provider_name: str | None = None) -> EmbedResponse:
+    """Generate a vector embedding for the given text using JinaProvider."""
     provider = JinaProvider()
     response = provider.embed_text(text=text)
     logger.info(

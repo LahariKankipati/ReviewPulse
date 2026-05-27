@@ -4,6 +4,7 @@ import type { Session } from "../types/domain";
 
 type Props = { onAuth: (session: Session) => void };
 
+// Login/register page that persists the session to localStorage and calls onAuth on success.
 export function AuthPage({ onAuth }: Props) {
   const [tab, setTab] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
@@ -11,6 +12,7 @@ export function AuthPage({ onAuth }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Submits the login or registration form, builds a Session, stores it, and invokes onAuth.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;

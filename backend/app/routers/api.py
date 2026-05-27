@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 from collections import defaultdict
 
-from sqlalchemy import Select, and_, func, select, text
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -61,6 +61,7 @@ class LoginRequest(BaseModel):
 
 
 def _build_synthetic_reviews(count: int) -> list[IngestReviewInput]:
+    """Generate a list of random synthetic review inputs for testing and demos."""
     if count <= 0:
         return []
     snippets = [
@@ -87,6 +88,7 @@ def _build_synthetic_reviews(count: int) -> list[IngestReviewInput]:
 
 
 async def _run_job_background(job_id: str, reviews: list[IngestReviewInput], provider_name: str | None) -> None:
+    """Open a dedicated DB session and run an ingestion job as a background task."""
     async with SessionLocal() as db:
         await process_ingestion_job(
             db=db,
@@ -98,6 +100,7 @@ async def _run_job_background(job_id: str, reviews: list[IngestReviewInput], pro
 
 @router.post("/authors")
 async def create_author(payload: AuthorCreateRequest, db: AsyncSession = Depends(get_db)):
+    """Register a new author account, rejecting duplicates by auth_user_id."""
     existing = await db.scalar(select(Author).where(Author.auth_user_id == payload.auth_user_id))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Author with auth_user_id already exists")
@@ -123,6 +126,7 @@ async def create_author(payload: AuthorCreateRequest, db: AsyncSession = Depends
 
 @router.post("/auth/login")
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Authenticate an existing author by email and update their login timestamps."""
     author = await db.scalar(select(Author).where(Author.email == payload.email))
     if author is None:
         raise HTTPException(status_code=404, detail="No account found with this email. Please register first.")
@@ -143,6 +147,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 @router.get("/authors/{author_id}/books")
 async def list_author_books(author_id: str, db: AsyncSession = Depends(get_db)):
+    """Return all books owned by the given author, ordered by creation date."""
     result = await db.execute(select(Book).where(Book.author_id == author_id).order_by(Book.created_at))
     books = result.scalars().all()
     return {
@@ -152,6 +157,7 @@ async def list_author_books(author_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/authors/{author_id}/books")
 async def add_book(author_id: str, payload: BookCreateRequest, db: AsyncSession = Depends(get_db)):
+    """Create a new book for the author, returning existing entry if ISBN already exists."""
     author = await db.get(Author, author_id)
     if author is None:
         raise HTTPException(status_code=404, detail="Author not found")
@@ -172,6 +178,7 @@ async def add_book(author_id: str, payload: BookCreateRequest, db: AsyncSession 
 
 @router.delete("/books/{book_id}")
 async def delete_book(book_id: str, author_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """Delete a book and all its associated data, scoped to the requesting author."""
     book = await db.scalar(select(Book).where(Book.id == book_id, Book.author_id == author_id))
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -187,6 +194,7 @@ async def trigger_ingestion(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
+    """Enqueue an ingestion job for a book and run it as a background task."""
     book = await db.get(Book, book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -204,6 +212,7 @@ async def trigger_ingestion(
 
 @router.get("/jobs/{job_id}")
 async def get_job_status(job_id: str, author_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """Return the current status and counters for a single ingestion job, scoped to author."""
     job = await db.scalar(select(IngestionJob).where(IngestionJob.id == job_id, IngestionJob.author_id == author_id))
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -237,6 +246,7 @@ async def list_reviews(
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
+    """List paginated reviews for a book with optional sentiment, AI-flag, actionability, theme, and date filters."""
     q: Select = (
         select(Review, ReviewAnalysis)
         .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
@@ -304,6 +314,7 @@ async def list_reviews(
 
 @router.post("/authors/{author_id}/search")
 async def semantic_search(author_id: str, payload: SearchRequest, db: AsyncSession = Depends(get_db)):
+    """Run a vector similarity search over the author's review embeddings and return ranked snippets."""
     query_emb = embed_text(text=payload.query)
 
     # Postgres/pgvector path.

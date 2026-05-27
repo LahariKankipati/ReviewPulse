@@ -9,23 +9,21 @@ type Props = {
   lastVisit: Date;
 };
 
-function starsStr(n: number) {
-  const full = Math.round(n);
-  return "★".repeat(full) + "☆".repeat(Math.max(0, 5 - full));
-}
-
+// Returns the raw average star rating across all rated reviews.
 function avgRating(reviews: ReviewItem[]) {
   const rated = reviews.filter((r) => r.rating != null);
   if (!rated.length) return null;
   return rated.reduce((s, r) => s + r.rating!, 0) / rated.length;
 }
 
+// Returns the average rating excluding reviews flagged as AI-generated.
 function trueRating(reviews: ReviewItem[]) {
   const real = reviews.filter((r) => r.rating != null && !r.analysis?.ai_generated_flag);
   if (!real.length) return null;
   return real.reduce((s, r) => s + r.rating!, 0) / real.length;
 }
 
+// Tallies positive, mixed, and negative sentiment counts across a list of reviews.
 function sentimentCounts(reviews: ReviewItem[]) {
   let pos = 0, mix = 0, neg = 0;
   for (const r of reviews) {
@@ -36,6 +34,7 @@ function sentimentCounts(reviews: ReviewItem[]) {
   return { pos, mix, neg, total: pos + mix + neg };
 }
 
+// Returns the top N most frequently mentioned themes across a list of reviews.
 function topThemes(reviews: ReviewItem[], n = 3) {
   const counts: Record<string, number> = {};
   for (const r of reviews) {

@@ -31,6 +31,7 @@ _SENTIMENT_MAP = {
 
 
 def _extract_json(text: str) -> dict:
+    """Extract and parse the first JSON object from a model response string, normalizing sentiment."""
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
@@ -54,6 +55,7 @@ class GroqProvider:
         reraise=True,
     )
     def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
+        """Call the Groq chat API to classify sentiment, themes, AI-detection, and actionability for a review."""
         if not settings.groq_api_key:
             raise ValueError("GROQ_API_KEY is not configured")
 
@@ -81,6 +83,7 @@ class GroqProvider:
         )
 
     def embed_text(self, *, text: str) -> EmbedResponse:
+        """Delegate embedding to JinaProvider since Groq offers no embedding model."""
         # Groq has no embedding model — delegate to Jina
         return JinaProvider().embed_text(text=text)
 
@@ -96,6 +99,7 @@ class JinaProvider:
         reraise=True,
     )
     def embed_text(self, *, text: str) -> EmbedResponse:
+        """Call the Jina AI embeddings API and return a 768-dim vector for the input text."""
         if not settings.jina_api_key:
             raise ValueError("JINA_API_KEY is not configured")
 
@@ -111,6 +115,7 @@ class JinaProvider:
         return EmbedResponse(provider=self.provider_name, model="jina-embeddings-v2-base-en", vector=vector)
 
     def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
+        """Raise NotImplementedError as JinaProvider is for embeddings only, not text analysis."""
         raise NotImplementedError("Use GroqProvider for analysis")
 
 
@@ -125,12 +130,14 @@ class GeminiProvider:
     model: str = "gemini-2.0-flash"
 
     def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
+        """Raise NotImplementedError as the Gemini provider is currently inactive."""
         raise NotImplementedError(
             "GeminiProvider.analyze_review is not active — Gemini quota was exhausted. "
             "Use GroqProvider (default) or restore a valid GEMINI_API_KEY to enable."
         )
 
     def embed_text(self, *, text: str) -> EmbedResponse:
+        """Raise NotImplementedError as Gemini embeddings are inactive; JinaProvider is used instead."""
         raise NotImplementedError(
             "GeminiProvider.embed_text is not active — using JinaProvider for embeddings. "
             "Restore a valid GEMINI_API_KEY to enable."

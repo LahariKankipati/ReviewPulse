@@ -16,6 +16,7 @@ const NAV_ITEMS: { view: AppView; icon: string; label: string }[] = [
   { view: "digest", icon: "✉", label: "Weekly Digest" },
 ];
 
+// Renders the full-width desktop sidebar with navigation links and the signed-in author's info.
 export function Sidebar({ session, view, onNav, onLogout }: Props) {
   const initials = (session.name ?? session.email)
     .split(" ")
@@ -64,8 +65,8 @@ export function Sidebar({ session, view, onNav, onLogout }: Props) {
   );
 }
 
-/* Mobile top bar shown on small screens */
-export function MobileTopbar({ session, view, onNav, onLogout }: Props) {
+// Renders a compact icon-based navigation bar for mobile viewports.
+export function MobileTopbar({ view, onNav, onLogout }: Props) {
   return (
     <div className="mobile-topbar">
       <div className="mobile-logo">ReviewPulse·</div>

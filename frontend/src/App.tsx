@@ -11,6 +11,7 @@ import type { Book, ReviewItem, SearchHit, Session } from "./types/domain";
 
 const SESSION_KEY = "rp_session";
 
+// Reads and parses the persisted session from localStorage, returning null on failure.
 function loadSession(): Session | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -64,6 +65,7 @@ export default function App() {
     checkHealth().catch(() => {});
   }, []);
 
+  // Sets the active session after login/register and resets all book state.
   function handleAuth(s: Session) {
     setSession(s);
     setView("dashboard");
@@ -72,12 +74,14 @@ export default function App() {
     setSelectedBook(null);
   }
 
+  // Removes a deleted book and its reviews from local state and clears the selected book.
   function handleDeleteBook(bookId: string) {
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
     setBookReviews((prev) => { const next = { ...prev }; delete next[bookId]; return next; });
     setSelectedBook(null);
   }
 
+  // Clears the session from localStorage and resets all application state.
   function handleLogout() {
     localStorage.removeItem(SESSION_KEY);
     setSession(null);
@@ -88,12 +92,14 @@ export default function App() {
     setError(null);
   }
 
+  // Navigates to a new view and clears any selected book or stale error.
   function handleNav(v: AppView) {
     setView(v);
     setSelectedBook(null);
     setError(null);
   }
 
+  // Selects a book for the detail view and eagerly refreshes its reviews from the API.
   async function handleSelectBook(book: Book) {
     setSelectedBook(book);
     setView("dashboard");
@@ -109,6 +115,7 @@ export default function App() {
     }
   }
 
+  // Merges a newly added book and its reviews into state and navigates to the book detail view.
   function handleBookAdded(book: Book, reviews: ReviewItem[]) {
     setBooks((prev) => {
       if (prev.find((b) => b.id === book.id)) return prev;
@@ -121,6 +128,7 @@ export default function App() {
     setView("dashboard");
   }
 
+  // Runs a semantic search query and stores the ranked results for display in SearchView.
   async function handleSearch(query: string) {
     if (!session) return;
     setSearchBusy(true);

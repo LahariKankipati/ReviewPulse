@@ -14,11 +14,13 @@ type Props = {
 };
 
 /* ── helpers ─────────────────────────── */
+// Renders a star-rating string of filled and empty stars for a numeric rating.
 function starsStr(n: number) {
   const r = Math.round(n);
   return "★".repeat(r) + "☆".repeat(Math.max(0, 5 - r));
 }
 
+// Returns the average star rating, optionally excluding AI-generated reviews.
 function avg(reviews: ReviewItem[], onlyReal = false) {
   const rs = onlyReal ? reviews.filter((r) => !r.analysis?.ai_generated_flag) : reviews;
   const rated = rs.filter((r) => r.rating != null);
@@ -26,6 +28,7 @@ function avg(reviews: ReviewItem[], onlyReal = false) {
   return rated.reduce((s, r) => s + r.rating!, 0) / rated.length;
 }
 
+// Tallies positive, mixed, and negative sentiment counts across a list of reviews.
 function sentimentCounts(reviews: ReviewItem[]) {
   let pos = 0, mix = 0, neg = 0;
   for (const r of reviews) {
@@ -36,17 +39,20 @@ function sentimentCounts(reviews: ReviewItem[]) {
   return { pos, mix, neg };
 }
 
+// Returns the top 8 themes with their counts, sorted by frequency.
 function topThemes(reviews: ReviewItem[]) {
   const c: Record<string, number> = {};
   for (const r of reviews) for (const t of r.analysis?.themes ?? []) c[t] = (c[t] ?? 0) + 1;
   return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 8);
 }
 
+// Sums the LLM analysis cost across all reviews.
 function totalCost(reviews: ReviewItem[]) {
   return reviews.reduce((s, r) => s + (r.analysis?.cost_usd ?? 0), 0);
 }
 
 /* ── F5: Weekly sentiment trend ─────── */
+// Maps a date string to the ISO date of its Monday (week start key).
 function weekKey(dateStr: string): string {
   const d = new Date(dateStr);
   const day = d.getDay();
@@ -55,6 +61,7 @@ function weekKey(dateStr: string): string {
   return monday.toISOString().slice(0, 10);
 }
 
+// Buckets reviews by week and returns up to 10 weekly sentiment data points for charting.
 function weeklyTrend(reviews: ReviewItem[]) {
   const groups: Record<string, { pos: number; mix: number; neg: number }> = {};
   for (const r of reviews) {
@@ -77,6 +84,7 @@ function weeklyTrend(reviews: ReviewItem[]) {
 }
 
 /* ── F5: Week-over-week sentiment delta ── */
+// Computes the positive/negative sentiment percentage change between the last two weekly buckets.
 function weekOverWeekDelta(reviews: ReviewItem[]) {
   const trend = weeklyTrend(reviews);
   if (trend.length < 2) return null;
@@ -96,6 +104,7 @@ function weekOverWeekDelta(reviews: ReviewItem[]) {
 }
 
 /* ── F5: Theme frequency over time ─── */
+// Returns rising and falling themes by comparing the last two weeks of theme mention counts.
 function themeFrequencyOverTime(reviews: ReviewItem[]) {
   const groups: Record<string, Record<string, number>> = {};
   for (const r of reviews) {
@@ -122,6 +131,7 @@ function themeFrequencyOverTime(reviews: ReviewItem[]) {
 }
 
 /* ── Sentiment bar ───────────────────── */
+// Renders a proportional color-coded bar showing positive/mixed/negative sentiment distribution.
 function SentimentBar({ pos, mix, neg }: { pos: number; mix: number; neg: number }) {
   const total = pos + mix + neg || 1;
   return (
@@ -141,6 +151,7 @@ function SentimentBar({ pos, mix, neg }: { pos: number; mix: number; neg: number
 }
 
 /* ── Review card ─────────────────────── */
+// Renders a single review with sentiment badge, summary, themes, and action flags.
 function ReviewCard({ review }: { review: ReviewItem }) {
   const s = review.analysis?.sentiment;
   const cls = s === "positive" ? "rc-positive" : s === "mixed" ? "rc-mixed" : s === "negative" ? "rc-negative" : "";
@@ -179,6 +190,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
 }
 
 /* ── Main ────────────────────────────── */
+// Full book deep-dive page with sentiment trends, theme breakdown, actionable spotlight, and filterable review list.
 export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }: Props) {
   const [sentFilter, setSentFilter] = useState<SentFilter>("all");
   const [actionableOnly, setActionableOnly] = useState(false);

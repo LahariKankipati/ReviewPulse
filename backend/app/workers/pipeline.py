@@ -40,6 +40,7 @@ class IngestReviewInput:
 
 
 def _review_hash(book_key: str, external_id: str, body: str) -> str:
+    """Compute a stable SHA-256 fingerprint for a review to enforce idempotent inserts."""
     normalized = " ".join(body.lower().split())
     raw = f"{book_key}|{external_id}|{normalized}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

@@ -9,11 +9,7 @@ type Props = {
 };
 
 /* ── helpers ─────────────────────────── */
-function starsStr(n: number) {
-  const r = Math.round(n);
-  return "★".repeat(r) + "☆".repeat(Math.max(0, 5 - r));
-}
-
+// Returns the average star rating, optionally excluding AI-generated reviews.
 function avgRating(reviews: ReviewItem[], onlyReal = false) {
   const rs = onlyReal ? reviews.filter((r) => !r.analysis?.ai_generated_flag) : reviews;
   const rated = rs.filter((r) => r.rating != null);
@@ -21,6 +17,7 @@ function avgRating(reviews: ReviewItem[], onlyReal = false) {
   return rated.reduce((s, r) => s + r.rating!, 0) / rated.length;
 }
 
+// Tallies positive, mixed, and negative sentiment counts across a list of reviews.
 function sentimentCounts(reviews: ReviewItem[]) {
   let pos = 0, mix = 0, neg = 0;
   for (const r of reviews) {
@@ -31,16 +28,19 @@ function sentimentCounts(reviews: ReviewItem[]) {
   return { pos, mix, neg };
 }
 
+// Returns the top N most frequently mentioned themes across a list of reviews.
 function topThemes(reviews: ReviewItem[], n = 3) {
   const c: Record<string, number> = {};
   for (const r of reviews) for (const t of r.analysis?.themes ?? []) c[t] = (c[t] ?? 0) + 1;
   return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t);
 }
 
+// Sums the LLM analysis cost across all reviews.
 function totalCost(reviews: ReviewItem[]) {
   return reviews.reduce((s, r) => s + (r.analysis?.cost_usd ?? 0), 0);
 }
 
+// Formats an ISO date string into a human-readable short date, or returns a fallback.
 function formatDate(iso: string | null | undefined) {
   if (!iso) return "your last visit";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
