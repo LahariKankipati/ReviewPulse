@@ -7,32 +7,29 @@ class Settings(BaseSettings):
     """Typed configuration shared by API and worker processes."""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Async DB URL used by API and workers.
+    # Async DB URL — postgresql+asyncpg://... with pgvector enabled.
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/reviewpulse"
 
-    # --- Redis / Celery broker ---
-    redis_url: str = "redis://localhost:6379/0"
-
-    # LLM provider defaults.
-    llm_provider: str = "groq"            # "groq" (default)
+    # Active LLM provider: "groq" (default). Swap to "gemini" to route to GeminiProvider stub.
+    llm_provider: str = "groq"
     groq_api_key: str = ""
-    jina_api_key: str = ""               # used for embeddings (jina-embeddings-v2-base-en, 768-dim)
     llm_model_groq: str = "llama-3.1-8b-instant"
-    embedding_model: str = "gemini-embedding"
-    embedding_dim: int = 768
 
-    # Secret used to verify Supabase JWTs.
-    supabase_jwt_secret: str = "dev-insecure-secret-change-me"
+    # Active embedding provider: Jina AI (jina-embeddings-v2-base-en, 768-dim).
+    jina_api_key: str = ""
 
-    # Comma-separated CORS origins and webhook signing secret.
+    # Comma-separated allowed frontend origins.
     cors_origins: str = "http://localhost:5173"
+
+    # HMAC secret for signing job-completion webhooks (N10).
+    # If webhook_url is empty, webhook firing is skipped silently.
     webhook_secret: str = "dev-webhook-hmac-secret"
-    # Optional URL to call when an ingestion job completes.
-    # If empty, webhook is skipped silently.
     webhook_url: str = ""
-    environment: str = "development"
-    # Secret for the protected /api/admin/refresh endpoint (used by GitHub Actions cron).
+
+    # Secret for POST /api/admin/refresh and GET /api/metrics (used by GitHub Actions cron).
     admin_secret: str = "dev-admin-secret-change-me"
+
+    environment: str = "development"
 
 
 @lru_cache
