@@ -81,8 +81,8 @@ class GroqProvider:
         )
 
     def embed_text(self, *, text: str) -> EmbedResponse:
-        # Groq has no embedding model — delegate to Gemini (separate quota from generate_content)
-        return GeminiProvider().embed_text(text=text)
+        # Groq has no embedding model — delegate to Jina
+        return JinaProvider().embed_text(text=text)
 
 
 @dataclass
@@ -112,3 +112,26 @@ class JinaProvider:
 
     def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
         raise NotImplementedError("Use GroqProvider for analysis")
+
+
+@dataclass
+class GeminiProvider:
+    """Second LLM adapter implementation (N2).
+    Gemini quota was exhausted during development — Groq is the active provider.
+    This stub satisfies the provider-agnostic adapter contract; swap in a working
+    Gemini API key and un-stub analyze_review to activate.
+    """
+    provider_name: str = "gemini"
+    model: str = "gemini-2.0-flash"
+
+    def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
+        raise NotImplementedError(
+            "GeminiProvider.analyze_review is not active — Gemini quota was exhausted. "
+            "Use GroqProvider (default) or restore a valid GEMINI_API_KEY to enable."
+        )
+
+    def embed_text(self, *, text: str) -> EmbedResponse:
+        raise NotImplementedError(
+            "GeminiProvider.embed_text is not active — using JinaProvider for embeddings. "
+            "Restore a valid GEMINI_API_KEY to enable."
+        )
