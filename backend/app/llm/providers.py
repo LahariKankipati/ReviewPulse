@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from google import genai as google_genai
+import httpx
 from groq import Groq
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 
@@ -86,8 +86,8 @@ class GroqProvider:
 
 
 @dataclass
-class GeminiProvider:
-    provider_name: str = "gemini"
+class JinaProvider:
+    provider_name: str = "jina"
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -96,14 +96,19 @@ class GeminiProvider:
         reraise=True,
     )
     def embed_text(self, *, text: str) -> EmbedResponse:
-        if not settings.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is not configured")
+        if not settings.jina_api_key:
+            raise ValueError("JINA_API_KEY is not configured")
 
-        client = google_genai.Client(api_key=settings.gemini_api_key)
-        result = client.models.embed_content(model="text-embedding-004", contents=text)
-        vector = result.embeddings[0].values
+        resp = httpx.post(
+            "https://api.jina.ai/v1/embeddings",
+            headers={"Authorization": f"Bearer {settings.jina_api_key}", "Content-Type": "application/json"},
+            json={"model": "jina-embeddings-v2-base-en", "input": [text]},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        vector = resp.json()["data"][0]["embedding"]
 
-        return EmbedResponse(provider=self.provider_name, model="text-embedding-004", vector=vector)
+        return EmbedResponse(provider=self.provider_name, model="jina-embeddings-v2-base-en", vector=vector)
 
     def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
         raise NotImplementedError("Use GroqProvider for analysis")

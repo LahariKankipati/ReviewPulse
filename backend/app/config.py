@@ -14,11 +14,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # LLM provider defaults.
-    llm_provider: str = "groq"            # "groq" (default) | "gemini"
+    llm_provider: str = "groq"            # "groq" (default)
     groq_api_key: str = ""
-    gemini_api_key: str = ""              # used for embeddings regardless of llm_provider
+    jina_api_key: str = ""               # used for embeddings (jina-embeddings-v2-base-en, 768-dim)
     llm_model_groq: str = "llama-3.1-8b-instant"
-    llm_model_gemini: str = "gemini-2.0-flash"
     embedding_model: str = "gemini-embedding"
     embedding_dim: int = 768
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from app.config import get_settings
 from app.llm.base import LLMProvider
-from app.llm.providers import GeminiProvider, GroqProvider
+from app.llm.providers import JinaProvider, GroqProvider
 from app.llm.schemas import AnalyzeReviewResponse, EmbedResponse
 from app.logging_config import get_logger
 
@@ -37,7 +37,7 @@ def analyze_review(*, review_title: str, review_body: str, provider_name: str | 
 
 
 def embed_text(*, text: str, provider_name: str | None = None) -> EmbedResponse:
-    provider = get_provider(provider_name)
+    provider = JinaProvider()
     response = provider.embed_text(text=text)
     logger.info(
         "embedding_completed",
