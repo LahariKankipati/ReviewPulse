@@ -47,16 +47,19 @@ function totalCost(reviews: ReviewItem[]) {
 }
 
 /* ── F5: Weekly sentiment trend ─────── */
+function weekKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return monday.toISOString().slice(0, 10);
+}
+
 function weeklyTrend(reviews: ReviewItem[]) {
   const groups: Record<string, { pos: number; mix: number; neg: number }> = {};
   for (const r of reviews) {
     if (!r.review_date || !r.analysis) continue;
-    const d = new Date(r.review_date);
-    // Monday of that week as key
-    const day = d.getDay();
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-    const key = monday.toISOString().slice(0, 10);
+    const key = weekKey(r.review_date);
     if (!groups[key]) groups[key] = { pos: 0, mix: 0, neg: 0 };
     if (r.analysis.sentiment === "positive") groups[key].pos++;
     else if (r.analysis.sentiment === "mixed") groups[key].mix++;
@@ -66,10 +69,56 @@ function weeklyTrend(reviews: ReviewItem[]) {
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-10)
     .map(([key, counts]) => ({
+      key,
       label: new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       ...counts,
       total: counts.pos + counts.mix + counts.neg,
     }));
+}
+
+/* ── F5: Week-over-week sentiment delta ── */
+function weekOverWeekDelta(reviews: ReviewItem[]) {
+  const trend = weeklyTrend(reviews);
+  if (trend.length < 2) return null;
+  const prev = trend[trend.length - 2];
+  const curr = trend[trend.length - 1];
+  const prevPosRate = prev.total > 0 ? prev.pos / prev.total : 0;
+  const currPosRate = curr.total > 0 ? curr.pos / curr.total : 0;
+  const prevNegRate = prev.total > 0 ? prev.neg / prev.total : 0;
+  const currNegRate = curr.total > 0 ? curr.neg / curr.total : 0;
+  return {
+    thisWeek: curr.label,
+    lastWeek: prev.label,
+    posDelta: Math.round((currPosRate - prevPosRate) * 100),
+    negDelta: Math.round((currNegRate - prevNegRate) * 100),
+    totalDelta: curr.total - prev.total,
+  };
+}
+
+/* ── F5: Theme frequency over time ─── */
+function themeFrequencyOverTime(reviews: ReviewItem[]) {
+  const groups: Record<string, Record<string, number>> = {};
+  for (const r of reviews) {
+    if (!r.review_date || !r.analysis?.themes?.length) continue;
+    const key = weekKey(r.review_date);
+    if (!groups[key]) groups[key] = {};
+    for (const t of r.analysis.themes) groups[key][t] = (groups[key][t] ?? 0) + 1;
+  }
+  const weeks = Object.keys(groups).sort().slice(-4);
+  if (weeks.length < 2) return null;
+  const curr = groups[weeks[weeks.length - 1]] ?? {};
+  const prev = groups[weeks[weeks.length - 2]] ?? {};
+  const allThemes = new Set([...Object.keys(curr), ...Object.keys(prev)]);
+  const diffs = Array.from(allThemes)
+    .map((theme) => ({ theme, curr: curr[theme] ?? 0, prev: prev[theme] ?? 0, delta: (curr[theme] ?? 0) - (prev[theme] ?? 0) }))
+    .filter((d) => d.curr > 0 || d.prev > 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 6);
+  return {
+    thisWeek: new Date(weeks[weeks.length - 1]).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    lastWeek: new Date(weeks[weeks.length - 2]).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    diffs,
+  };
 }
 
 /* ── Sentiment bar ───────────────────── */
@@ -156,6 +205,8 @@ export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }:
   const actionableReviews = reviews.filter((r) => r.analysis?.actionable);
   const cost = totalCost(reviews);
   const trend = weeklyTrend(reviews);
+  const wowDelta = weekOverWeekDelta(reviews);
+  const themeTrend = themeFrequencyOverTime(reviews);
 
   const filtered = reviews.filter((r) => {
     if (sentFilter !== "all" && r.analysis?.sentiment !== sentFilter) return false;
@@ -190,6 +241,38 @@ export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }:
             </h1>
             {book.isbn && <div style={{ fontSize: "0.74rem", color: "var(--ink-3)", marginBottom: "0.75rem" }}>ISBN {book.isbn}</div>}
             <SentimentBar pos={pos} mix={mix} neg={neg} />
+
+            {/* Week-over-week delta */}
+            {wowDelta && (
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.65rem", alignItems: "center" }}>
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-3)" }}>
+                  vs last week
+                </span>
+                <span style={{
+                  fontSize: "0.74rem", fontWeight: 700, borderRadius: 4, padding: "0.1rem 0.45rem",
+                  background: wowDelta.posDelta > 0 ? "#dcfce7" : wowDelta.posDelta < 0 ? "#fee2e2" : "#f1f5f9",
+                  color: wowDelta.posDelta > 0 ? "#15803d" : wowDelta.posDelta < 0 ? "#b91c1c" : "var(--ink-3)",
+                }}>
+                  {wowDelta.posDelta > 0 ? "↑" : wowDelta.posDelta < 0 ? "↓" : "→"} Positive {wowDelta.posDelta > 0 ? "+" : ""}{wowDelta.posDelta}pp
+                </span>
+                <span style={{
+                  fontSize: "0.74rem", fontWeight: 700, borderRadius: 4, padding: "0.1rem 0.45rem",
+                  background: wowDelta.negDelta < 0 ? "#dcfce7" : wowDelta.negDelta > 0 ? "#fee2e2" : "#f1f5f9",
+                  color: wowDelta.negDelta < 0 ? "#15803d" : wowDelta.negDelta > 0 ? "#b91c1c" : "var(--ink-3)",
+                }}>
+                  {wowDelta.negDelta > 0 ? "↑" : wowDelta.negDelta < 0 ? "↓" : "→"} Negative {wowDelta.negDelta > 0 ? "+" : ""}{wowDelta.negDelta}pp
+                </span>
+                {wowDelta.totalDelta !== 0 && (
+                  <span style={{ fontSize: "0.72rem", color: "var(--ink-3)" }}>
+                    ({wowDelta.totalDelta > 0 ? "+" : ""}{wowDelta.totalDelta} reviews)
+                  </span>
+                )}
+                <span style={{ fontSize: "0.68rem", color: "var(--ink-3)" }}>
+                  {wowDelta.thisWeek} vs {wowDelta.lastWeek}
+                </span>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: "1.25rem", marginTop: "0.85rem", flexWrap: "wrap", fontSize: "0.83rem", color: "var(--ink-2)" }}>
               <span><strong style={{ color: "var(--ink)" }}>{reviews.length}</strong> reviews</span>
               {actionableReviews.length > 0 && (
@@ -277,6 +360,49 @@ export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }:
           </div>
         )}
       </div>
+
+      {/* Theme frequency over time */}
+      {themeTrend && (
+        <div className="card card-sm" style={{ marginBottom: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.85rem" }}>
+            <div style={{ fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-3)" }}>
+              Theme Frequency · This Week vs Last
+            </div>
+            <div style={{ fontSize: "0.68rem", color: "var(--ink-3)" }}>
+              {themeTrend.thisWeek} vs {themeTrend.lastWeek}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {themeTrend.diffs.map(({ theme, curr, prev, delta }) => (
+              <div key={theme} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ minWidth: 130, fontSize: "0.8rem", color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {theme}
+                </div>
+                <div style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", borderRadius: 3,
+                    width: `${Math.min(100, (curr / Math.max(1, ...themeTrend.diffs.map(d => d.curr))) * 100)}%`,
+                    background: delta > 0 ? "var(--green)" : delta < 0 ? "var(--red)" : "var(--ink-3)",
+                    transition: "width 0.3s",
+                  }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", minWidth: 80, justifyContent: "flex-end" }}>
+                  <span style={{ fontSize: "0.74rem", color: "var(--ink-2)" }}>{prev}→{curr}</span>
+                  {delta !== 0 && (
+                    <span style={{
+                      fontSize: "0.68rem", fontWeight: 700, borderRadius: 3, padding: "0.05rem 0.3rem",
+                      background: delta > 0 ? "#dcfce7" : "#fee2e2",
+                      color: delta > 0 ? "#15803d" : "#b91c1c",
+                    }}>
+                      {delta > 0 ? "↑" : "↓"}{Math.abs(delta)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Actionable spotlight */}
       {actionableReviews.length > 0 && (
