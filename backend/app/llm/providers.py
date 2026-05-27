@@ -15,10 +15,19 @@ settings = get_settings()
 
 
 ANALYSIS_PROMPT = (
-    "Analyze this book review and return strict JSON only with keys: "
-    "sentiment, sentiment_confidence, themes, ai_generated_flag, ai_confidence, "
-    "summary, actionable, actionability_reason."
+    "Analyze this book review and return strict JSON only with these exact keys: "
+    "sentiment (MUST be exactly one of: positive, mixed, negative — never neutral or other values), "
+    "sentiment_confidence (float 0-1), themes (list of strings), "
+    "ai_generated_flag (bool), ai_confidence (float 0-1), "
+    "summary (string), actionable (bool), actionability_reason (string)."
 )
+
+_SENTIMENT_MAP = {
+    "neutral": "mixed",
+    "positive": "positive",
+    "mixed": "mixed",
+    "negative": "negative",
+}
 
 
 def _extract_json(text: str) -> dict:
@@ -26,7 +35,11 @@ def _extract_json(text: str) -> dict:
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
         raise ValueError("Model response did not contain JSON object")
-    return json.loads(text[start : end + 1])
+    data = json.loads(text[start : end + 1])
+    # Normalize sentiment to the allowed set
+    if "sentiment" in data:
+        data["sentiment"] = _SENTIMENT_MAP.get(str(data["sentiment"]).lower(), "mixed")
+    return data
 
 
 @dataclass
