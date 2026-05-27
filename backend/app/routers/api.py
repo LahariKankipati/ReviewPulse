@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from collections import defaultdict
+
 from sqlalchemy import Select, and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -366,6 +368,115 @@ async def semantic_search(author_id: str, payload: SearchRequest, db: AsyncSessi
             "model": query_emb.model,
             "items": scored[: payload.top_k],
         }
+
+
+@router.get("/books/{book_id}/trends")
+async def get_book_trends(
+    book_id: str,
+    author_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """F5: Sentiment-over-time series, theme-frequency-over-time, and week-over-week delta.
+    Scoped to author_id for multi-tenant isolation.
+    """
+    book = await db.scalar(select(Book).where(Book.id == book_id, Book.author_id == author_id))
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    rows = (
+        await db.execute(
+            select(Review, ReviewAnalysis)
+            .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
+            .where(Review.book_id == book_id, Review.author_id == author_id)
+            .where(ReviewAnalysis.id.isnot(None))
+            .order_by(Review.review_date.asc())
+        )
+    ).all()
+
+    def _week_key(dt: datetime) -> str:
+        day = dt.weekday()  # Monday=0
+        monday = dt - timedelta(days=day)
+        return monday.strftime("%Y-%m-%d")
+
+    # Build weekly sentiment buckets
+    sentiment_by_week: dict[str, dict[str, int]] = defaultdict(lambda: {"positive": 0, "mixed": 0, "negative": 0, "total": 0})
+    theme_by_week: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+    for review, analysis in rows:
+        if not review.review_date:
+            continue
+        wk = _week_key(review.review_date)
+        sent = analysis.sentiment.value
+        sentiment_by_week[wk][sent] += 1
+        sentiment_by_week[wk]["total"] += 1
+        for theme in (analysis.themes or []):
+            theme_by_week[wk][theme] += 1
+
+    # Sentiment over time — sorted list of weekly data points
+    sentiment_series = [
+        {
+            "week": wk,
+            "positive": v["positive"],
+            "mixed": v["mixed"],
+            "negative": v["negative"],
+            "total": v["total"],
+        }
+        for wk, v in sorted(sentiment_by_week.items())
+    ]
+
+    # Theme frequency over time — top themes per week (last 4 weeks)
+    sorted_weeks = sorted(theme_by_week.keys())[-4:]
+    theme_series = [
+        {
+            "week": wk,
+            "themes": dict(sorted(theme_by_week[wk].items(), key=lambda x: -x[1])[:8]),
+        }
+        for wk in sorted_weeks
+    ]
+
+    # Week-over-week delta — compare last two weeks
+    wow = None
+    if len(sentiment_series) >= 2:
+        prev = sentiment_series[-2]
+        curr = sentiment_series[-1]
+        prev_pos_rate = prev["positive"] / prev["total"] if prev["total"] else 0
+        curr_pos_rate = curr["positive"] / curr["total"] if curr["total"] else 0
+        prev_neg_rate = prev["negative"] / prev["total"] if prev["total"] else 0
+        curr_neg_rate = curr["negative"] / curr["total"] if curr["total"] else 0
+        wow = {
+            "this_week": curr["week"],
+            "last_week": prev["week"],
+            "positive_delta_pct": round((curr_pos_rate - prev_pos_rate) * 100, 1),
+            "negative_delta_pct": round((curr_neg_rate - prev_neg_rate) * 100, 1),
+            "total_delta": curr["total"] - prev["total"],
+        }
+
+    # Theme WoW — rising and falling themes between last two weeks
+    theme_wow = None
+    if len(sorted_weeks) >= 2:
+        curr_themes = theme_by_week[sorted_weeks[-1]]
+        prev_themes = theme_by_week[sorted_weeks[-2]]
+        all_themes = set(curr_themes) | set(prev_themes)
+        theme_wow = sorted(
+            [
+                {
+                    "theme": t,
+                    "this_week": curr_themes.get(t, 0),
+                    "last_week": prev_themes.get(t, 0),
+                    "delta": curr_themes.get(t, 0) - prev_themes.get(t, 0),
+                }
+                for t in all_themes
+            ],
+            key=lambda x: -abs(x["delta"]),
+        )[:8]
+
+    return {
+        "book_id": book_id,
+        "sentiment_over_time": sentiment_series,
+        "theme_frequency_over_time": theme_series,
+        "week_over_week": wow,
+        "theme_week_over_week": theme_wow,
+    }
 
 
 def _build_cron_reviews(batch_date: str, count: int) -> list[IngestReviewInput]:
