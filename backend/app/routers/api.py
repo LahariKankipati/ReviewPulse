@@ -1,21 +1,24 @@
 """Core API routes for catalog, ingestion jobs, review listing, and semantic search."""
 from __future__ import annotations
 
+import hmac
 import random
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import Select, and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import SessionLocal, get_db
 from app.llm.service import embed_text
 from app.models import Author, Book, IngestionJob, Review, ReviewAnalysis, ReviewEmbedding, Sentiment
 from app.workers.pipeline import IngestReviewInput, enqueue_ingestion_job, process_ingestion_job
 
 router = APIRouter(prefix="/api", tags=["reviewpulse"])
+settings = get_settings()
 
 
 class AuthorCreateRequest(BaseModel):
@@ -363,3 +366,66 @@ async def semantic_search(author_id: str, payload: SearchRequest, db: AsyncSessi
             "model": query_emb.model,
             "items": scored[: payload.top_k],
         }
+
+
+def _build_cron_reviews(batch_date: str, count: int) -> list[IngestReviewInput]:
+    """Generate synthetic reviews with date-stamped IDs so each daily cron run adds new reviews,
+    but re-running the same day is fully idempotent — body and rating are derived deterministically
+    from the external_id so review_hash is stable across repeated runs."""
+    import hashlib as _hl
+    snippets = [
+        "Loved the pacing and character growth.",
+        "Interesting ideas, but the ending felt rushed.",
+        "Dialogue felt flat and repetitive.",
+        "Great worldbuilding and emotional payoff.",
+        "The story kept me hooked until the very last page.",
+    ]
+    ratings = [1, 2, 3, 4, 5]
+    now = datetime.now(timezone.utc)
+
+    def _stable_pick(seed: str, lst: list):
+        idx = int(_hl.md5(seed.encode()).hexdigest(), 16) % len(lst)
+        return lst[idx]
+
+    return [
+        IngestReviewInput(
+            external_id=f"cron-{batch_date}-{i}",
+            reviewer_name=f"Reader {batch_date}-{i}",
+            rating=_stable_pick(f"rating-{batch_date}-{i}", ratings),
+            title=f"Cron review {batch_date}-{i}",
+            body=_stable_pick(f"body-{batch_date}-{i}", snippets),
+            review_date=now - timedelta(hours=_stable_pick(f"hr-{batch_date}-{i}", list(range(24)))),
+            source="synthetic-cron",
+        )
+        for i in range(1, count + 1)
+    ]
+
+
+@router.post("/admin/refresh")
+async def admin_refresh_all(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    synthetic_count: int = Query(default=3, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger re-ingest for every book across all authors.
+    Protected by X-Admin-Secret header — called by the GitHub Actions daily cron.
+    Uses date-stamped external IDs so each day's run adds new reviews idempotently.
+    """
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not hmac.compare_digest(secret, settings.admin_secret):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    books = (await db.execute(select(Book))).scalars().all()
+    if not books:
+        return {"triggered": 0, "jobs": []}
+
+    batch_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+    jobs_out = []
+    for book in books:
+        reviews = _build_cron_reviews(batch_date, synthetic_count)
+        job = await enqueue_ingestion_job(db=db, author_id=book.author_id, book_id=book.id)
+        background_tasks.add_task(_run_job_background, job.id, reviews, None)
+        jobs_out.append({"job_id": job.id, "book_id": book.id, "author_id": book.author_id})
+
+    return {"triggered": len(jobs_out), "batch_date": batch_date, "jobs": jobs_out}

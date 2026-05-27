@@ -1,0 +1,40 @@
+name: Scheduled Review Refresh
+
+# Runs daily at 6 AM UTC. Triggers re-ingest for every book across all authors.
+# Uses date-stamped external IDs so each run adds genuinely new synthetic reviews,
+# but re-running the same day is idempotent (same review_hash → skipped by pipeline).
+#
+# Required GitHub Secrets:
+#   BACKEND_URL   — e.g. https://reviewpulse-api.onrender.com
+#   ADMIN_SECRET  — must match ADMIN_SECRET env var set on the Render service
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # daily at 06:00 UTC
+  workflow_dispatch:        # allow manual trigger from GitHub Actions UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger review refresh for all books
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${{ secrets.BACKEND_URL }}/api/admin/refresh?synthetic_count=5" \
+            -H "X-Admin-Secret: ${{ secrets.ADMIN_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          echo "HTTP status: $HTTP_STATUS"
+          cat /tmp/response.json
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Refresh failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Log triggered jobs
+        run: |
+          TRIGGERED=$(cat /tmp/response.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('triggered', 0))")
+          echo "Triggered $TRIGGERED ingestion jobs"

@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # If empty, webhook is skipped silently.
     webhook_url: str = ""
     environment: str = "development"
+    # Secret for the protected /api/admin/refresh endpoint (used by GitHub Actions cron).
+    admin_secret: str = "dev-admin-secret-change-me"
 
 
 @lru_cache
