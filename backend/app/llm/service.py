@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from app.config import get_settings
 from app.llm.base import LLMProvider
-from app.llm.providers import JinaProvider, GroqProvider
+from app.llm.providers import GeminiProvider, GroqProvider, JinaProvider
 from app.llm.schemas import AnalyzeReviewResponse, EmbedResponse
 from app.logging_config import get_logger
 

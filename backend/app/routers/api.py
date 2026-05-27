@@ -370,6 +370,72 @@ async def semantic_search(author_id: str, payload: SearchRequest, db: AsyncSessi
         }
 
 
+@router.get("/authors/{author_id}/compare")
+async def compare_books(
+    author_id: str,
+    book_ids: str = Query(..., description="Comma-separated book IDs"),
+    db: AsyncSession = Depends(get_db),
+):
+    """F6: Cross-book comparison — side-by-side sentiment distribution, top themes,
+    AI-flagged rate, avg rating, and review velocity for N books.
+    Scoped to author_id so authors can only compare their own books.
+    """
+    ids = [b.strip() for b in book_ids.split(",") if b.strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Provide at least one book_id")
+
+    books = (await db.execute(
+        select(Book).where(Book.id.in_(ids), Book.author_id == author_id)
+    )).scalars().all()
+
+    if not books:
+        raise HTTPException(status_code=404, detail="No books found for this author")
+
+    result = []
+    for book in books:
+        rows = (await db.execute(
+            select(Review, ReviewAnalysis)
+            .outerjoin(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
+            .where(Review.book_id == book.id, Review.author_id == author_id)
+        )).all()
+
+        total = len(rows)
+        pos = sum(1 for _, a in rows if a and a.sentiment.value == "positive")
+        mix = sum(1 for _, a in rows if a and a.sentiment.value == "mixed")
+        neg = sum(1 for _, a in rows if a and a.sentiment.value == "negative")
+        ai_flagged = sum(1 for _, a in rows if a and a.ai_generated_flag)
+        actionable = sum(1 for _, a in rows if a and a.actionable)
+        rated = [r.rating for r, _ in rows if r.rating is not None]
+        avg_rating = round(sum(rated) / len(rated), 2) if rated else None
+
+        # Top themes
+        theme_counts: dict[str, int] = defaultdict(int)
+        for _, a in rows:
+            for t in (a.themes or []) if a else []:
+                theme_counts[t] += 1
+        top_themes = sorted(theme_counts.items(), key=lambda x: -x[1])[:5]
+
+        # Review velocity — reviews in last 7 days
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        velocity = sum(1 for r, _ in rows if r.review_date and r.review_date >= week_ago)
+
+        result.append({
+            "book_id": book.id,
+            "title": book.title,
+            "isbn": book.isbn,
+            "total_reviews": total,
+            "sentiment": {"positive": pos, "mixed": mix, "negative": neg},
+            "ai_flagged": ai_flagged,
+            "ai_flagged_rate": round(ai_flagged / total, 3) if total else 0,
+            "actionable": actionable,
+            "avg_rating": avg_rating,
+            "top_themes": [{"theme": t, "count": c} for t, c in top_themes],
+            "velocity_last_7d": velocity,
+        })
+
+    return {"author_id": author_id, "books": result}
+
+
 @router.get("/books/{book_id}/trends")
 async def get_book_trends(
     book_id: str,
