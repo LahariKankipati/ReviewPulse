@@ -39,12 +39,12 @@ export function AuthPage({ onAuth }: Props) {
       onAuth(session);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Something went wrong";
-      if (tab === "login" && msg.includes("404")) {
-        setError("No account found with that email. Try registering instead.");
-      } else if (tab === "register" && msg.includes("409")) {
-        setError("An account with this email already exists. Try logging in.");
+      if (tab === "login" && msg.startsWith("404")) {
+        setError("No account found with that email.");
+      } else if (tab === "register" && msg.startsWith("409")) {
+        setError("An account with this email already exists.");
       } else {
-        setError(msg);
+        setError("Something went wrong. Please try again.");
       }
     } finally {
       setBusy(false);
@@ -88,7 +88,25 @@ export function AuthPage({ onAuth }: Props) {
             />
           </div>
 
-          {error && <div className="error-bar" style={{ marginBottom: "0.75rem", marginTop: 0 }}>{error}</div>}
+          {error && (
+            <div className="error-bar" style={{ marginBottom: "0.75rem", marginTop: 0 }}>
+              {error}
+              {tab === "login" && error.includes("No account") && (
+                <> &mdash; <button
+                  type="button"
+                  onClick={() => { setTab("register"); setError(null); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontWeight: 700, textDecoration: "underline", padding: 0, fontSize: "inherit" }}
+                >Sign up here</button></>
+              )}
+              {tab === "register" && error.includes("already exists") && (
+                <> &mdash; <button
+                  type="button"
+                  onClick={() => { setTab("login"); setError(null); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontWeight: 700, textDecoration: "underline", padding: 0, fontSize: "inherit" }}
+                >Sign in instead</button></>
+              )}
+            </div>
+          )}
 
           <button className="btn btn-lg" style={{ width: "100%" }} type="submit" disabled={busy || !email.trim()}>
             {busy ? (tab === "login" ? "Signing in…" : "Creating account…") : (tab === "login" ? "Sign in" : "Create account")}

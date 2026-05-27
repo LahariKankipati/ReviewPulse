@@ -8,7 +8,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Request failed (${res.status})`);
+    throw new Error(`${res.status}: ${text || "Request failed"}`);
   }
   return res.json() as Promise<T>;
 }
