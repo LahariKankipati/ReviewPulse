@@ -97,17 +97,15 @@ export default function App() {
   async function handleSelectBook(book: Book) {
     setSelectedBook(book);
     setView("dashboard");
-    // Load reviews if not already loaded
-    if (!bookReviews[book.id] && session) {
-      setLoadingReviews(true);
-      try {
-        const data = await listBookReviews(book.id, session.id);
-        setBookReviews((prev) => ({ ...prev, [book.id]: data.items }));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load reviews");
-      } finally {
-        setLoadingReviews(false);
-      }
+    if (!session) return;
+    setLoadingReviews(true);
+    try {
+      const data = await listBookReviews(book.id, session.id, 100);
+      setBookReviews((prev) => ({ ...prev, [book.id]: data.items }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load reviews");
+    } finally {
+      setLoadingReviews(false);
     }
   }
 

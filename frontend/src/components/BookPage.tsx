@@ -244,32 +244,31 @@ export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }:
 
             {/* Week-over-week delta */}
             {wowDelta && (
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.65rem", alignItems: "center" }}>
-                <span style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-3)" }}>
-                  vs last week
-                </span>
-                <span style={{
-                  fontSize: "0.74rem", fontWeight: 700, borderRadius: 4, padding: "0.1rem 0.45rem",
-                  background: wowDelta.posDelta > 0 ? "#dcfce7" : wowDelta.posDelta < 0 ? "#fee2e2" : "#f1f5f9",
-                  color: wowDelta.posDelta > 0 ? "#15803d" : wowDelta.posDelta < 0 ? "#b91c1c" : "var(--ink-3)",
-                }}>
-                  {wowDelta.posDelta > 0 ? "↑" : wowDelta.posDelta < 0 ? "↓" : "→"} Positive {wowDelta.posDelta > 0 ? "+" : ""}{wowDelta.posDelta}pp
-                </span>
-                <span style={{
-                  fontSize: "0.74rem", fontWeight: 700, borderRadius: 4, padding: "0.1rem 0.45rem",
-                  background: wowDelta.negDelta < 0 ? "#dcfce7" : wowDelta.negDelta > 0 ? "#fee2e2" : "#f1f5f9",
-                  color: wowDelta.negDelta < 0 ? "#15803d" : wowDelta.negDelta > 0 ? "#b91c1c" : "var(--ink-3)",
-                }}>
-                  {wowDelta.negDelta > 0 ? "↑" : wowDelta.negDelta < 0 ? "↓" : "→"} Negative {wowDelta.negDelta > 0 ? "+" : ""}{wowDelta.negDelta}pp
-                </span>
-                {wowDelta.totalDelta !== 0 && (
-                  <span style={{ fontSize: "0.72rem", color: "var(--ink-3)" }}>
-                    ({wowDelta.totalDelta > 0 ? "+" : ""}{wowDelta.totalDelta} reviews)
+              <div style={{ marginTop: "0.75rem", padding: "0.6rem 0.8rem", background: "var(--surface-2)", borderRadius: 8 }}>
+                <div style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-3)", marginBottom: "0.45rem" }}>
+                  Compared to last week ({wowDelta.lastWeek} → {wowDelta.thisWeek})
+                </div>
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.8rem", color: wowDelta.posDelta > 0 ? "#15803d" : wowDelta.posDelta < 0 ? "#b91c1c" : "var(--ink-2)" }}>
+                    {wowDelta.posDelta > 0 ? "↑" : wowDelta.posDelta < 0 ? "↓" : "→"}{" "}
+                    <strong>Positive reviews</strong>{" "}
+                    {wowDelta.posDelta === 0
+                      ? "stayed the same"
+                      : `${wowDelta.posDelta > 0 ? "up" : "down"} ${Math.abs(wowDelta.posDelta)}% of reviews`}
                   </span>
-                )}
-                <span style={{ fontSize: "0.68rem", color: "var(--ink-3)" }}>
-                  {wowDelta.thisWeek} vs {wowDelta.lastWeek}
-                </span>
+                  <span style={{ fontSize: "0.8rem", color: wowDelta.negDelta > 0 ? "#b91c1c" : wowDelta.negDelta < 0 ? "#15803d" : "var(--ink-2)" }}>
+                    {wowDelta.negDelta > 0 ? "↑" : wowDelta.negDelta < 0 ? "↓" : "→"}{" "}
+                    <strong>Negative reviews</strong>{" "}
+                    {wowDelta.negDelta === 0
+                      ? "stayed the same"
+                      : `${wowDelta.negDelta > 0 ? "up" : "down"} ${Math.abs(wowDelta.negDelta)}% of reviews`}
+                  </span>
+                  {wowDelta.totalDelta !== 0 && (
+                    <span style={{ fontSize: "0.78rem", color: "var(--ink-3)" }}>
+                      {wowDelta.totalDelta > 0 ? "+" : ""}{wowDelta.totalDelta} new reviews this week
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 
@@ -353,9 +352,9 @@ export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }:
               ))}
             </div>
             <div className="sentiment-legend" style={{ marginTop: "0.65rem" }}>
-              <span><span className="legend-dot ld-pos" />pos</span>
-              <span><span className="legend-dot ld-mix" />mix</span>
-              <span><span className="legend-dot ld-neg" />neg</span>
+              <span><span className="legend-dot ld-pos" />Positive</span>
+              <span><span className="legend-dot ld-mix" />Mixed</span>
+              <span><span className="legend-dot ld-neg" />Negative</span>
             </div>
           </div>
         )}
@@ -364,42 +363,46 @@ export function BookPage({ book, reviews, loading, authorId, onBack, onDelete }:
       {/* Theme frequency over time */}
       {themeTrend && (
         <div className="card card-sm" style={{ marginBottom: "1.5rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.85rem" }}>
+          <div style={{ marginBottom: "0.85rem" }}>
             <div style={{ fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-3)" }}>
-              Theme Frequency · This Week vs Last
+              Topics Gaining or Losing Attention
             </div>
-            <div style={{ fontSize: "0.68rem", color: "var(--ink-3)" }}>
-              {themeTrend.thisWeek} vs {themeTrend.lastWeek}
+            <div style={{ fontSize: "0.78rem", color: "var(--ink-3)", marginTop: "0.25rem" }}>
+              How often each topic appeared in reviews — week of {themeTrend.lastWeek} vs {themeTrend.thisWeek}
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {themeTrend.diffs.map(({ theme, curr, prev, delta }) => (
-              <div key={theme} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <div style={{ minWidth: 130, fontSize: "0.8rem", color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {theme}
-                </div>
-                <div style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%", borderRadius: 3,
-                    width: `${Math.min(100, (curr / Math.max(1, ...themeTrend.diffs.map(d => d.curr))) * 100)}%`,
-                    background: delta > 0 ? "var(--green)" : delta < 0 ? "var(--red)" : "var(--ink-3)",
-                    transition: "width 0.3s",
-                  }} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", minWidth: 80, justifyContent: "flex-end" }}>
-                  <span style={{ fontSize: "0.74rem", color: "var(--ink-2)" }}>{prev}→{curr}</span>
-                  {delta !== 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            {themeTrend.diffs.map(({ theme, curr, prev, delta }) => {
+              const label = delta > 0
+                ? `Readers mentioned this ${delta} more time${delta === 1 ? "" : "s"} this week`
+                : delta < 0
+                ? `Readers mentioned this ${Math.abs(delta)} fewer time${Math.abs(delta) === 1 ? "" : "s"} this week`
+                : "Same as last week";
+              return (
+                <div key={theme}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
+                    <span style={{ fontSize: "0.83rem", fontWeight: 600, color: "var(--ink)" }}>{theme}</span>
                     <span style={{
-                      fontSize: "0.68rem", fontWeight: 700, borderRadius: 3, padding: "0.05rem 0.3rem",
-                      background: delta > 0 ? "#dcfce7" : "#fee2e2",
-                      color: delta > 0 ? "#15803d" : "#b91c1c",
+                      fontSize: "0.72rem", fontWeight: 700, borderRadius: 4, padding: "0.1rem 0.45rem",
+                      background: delta > 0 ? "#dcfce7" : delta < 0 ? "#fee2e2" : "#f1f5f9",
+                      color: delta > 0 ? "#15803d" : delta < 0 ? "#b91c1c" : "var(--ink-3)",
                     }}>
-                      {delta > 0 ? "↑" : "↓"}{Math.abs(delta)}
+                      {delta > 0 ? "↑ Trending up" : delta < 0 ? "↓ Less discussed" : "→ Stable"}
                     </span>
-                  )}
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--ink-3)", marginBottom: "0.3rem" }}>
+                    {label} · {prev} mention{prev !== 1 ? "s" : ""} last week → {curr} this week
+                  </div>
+                  <div style={{ height: 5, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 3,
+                      width: `${Math.min(100, (curr / Math.max(1, ...themeTrend.diffs.map(d => Math.max(d.curr, d.prev)))) * 100)}%`,
+                      background: delta > 0 ? "var(--green)" : delta < 0 ? "var(--red)" : "var(--ink-3)",
+                    }} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
