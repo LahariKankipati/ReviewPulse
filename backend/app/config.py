@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
     llm_model_anthropic: str = "claude-3-5-haiku-20241022"
-    llm_model_gemini: str = "gemini-1.5-flash"
+    llm_model_gemini: str = "gemini-2.0-flash"
     embedding_model: str = "gemini-embedding"
     embedding_dim: int = 768
 
