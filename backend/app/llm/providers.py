@@ -132,7 +132,7 @@ class GeminiProvider:
         if not settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is not configured")
 
-        emb = genai.embed_content(model="text-embedding-004", content=text)
+        emb = genai.embed_content(model="models/embedding-001", content=text)
         vector = emb["embedding"] if isinstance(emb, dict) else emb.embedding
 
-        return EmbedResponse(provider=self.provider_name, model="text-embedding-004", vector=vector)
+        return EmbedResponse(provider=self.provider_name, model="embedding-001", vector=vector)
