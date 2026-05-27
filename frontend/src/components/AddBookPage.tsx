@@ -31,16 +31,23 @@ export function AddBookPage({ session, onBookAdded }: Props) {
 
       // Step 2: Trigger ingestion
       const { job_id } = await triggerIngestion(book.id, count);
-      let currentJob = await getJob(job_id);
+      let currentJob = await getJob(job_id, session.id);
       setJob(currentJob);
 
-      // Step 3: Poll until done
+      // Step 3: Poll until done (max 80s)
       let attempts = 0;
       while ((currentJob.status === "running" || currentJob.status === "queued") && attempts < 40) {
         await new Promise((r) => setTimeout(r, 2000));
-        currentJob = await getJob(job_id);
+        try {
+          currentJob = await getJob(job_id, session.id);
+        } catch {
+          throw new Error("Lost connection while waiting for analysis. Please refresh and check your book.");
+        }
         setJob(currentJob);
         attempts++;
+      }
+      if (currentJob.status === "running" || currentJob.status === "queued") {
+        throw new Error("Analysis is taking longer than expected. It will finish in the background — check back in a minute.");
       }
 
       // Step 4: Load reviews

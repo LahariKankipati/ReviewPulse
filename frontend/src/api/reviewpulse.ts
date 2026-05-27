@@ -37,8 +37,8 @@ export function triggerIngestion(bookId: string, syntheticCount: number) {
   });
 }
 
-export function getJob(jobId: string) {
-  return request<Job>(`/api/jobs/${jobId}`);
+export function getJob(jobId: string, authorId: string) {
+  return request<Job>(`/api/jobs/${jobId}?author_id=${authorId}`);
 }
 
 export function deleteBook(bookId: string, authorId: string) {

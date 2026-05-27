@@ -203,8 +203,8 @@ async def trigger_ingestion(
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
-    job = await db.get(IngestionJob, job_id)
+async def get_job_status(job_id: str, author_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    job = await db.scalar(select(IngestionJob).where(IngestionJob.id == job_id, IngestionJob.author_id == author_id))
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return {
@@ -543,10 +543,14 @@ async def admin_refresh_all(
 
 
 @router.get("/metrics")
-async def get_metrics(db: AsyncSession = Depends(get_db)):
+async def get_metrics(request: Request, db: AsyncSession = Depends(get_db)):
     """N12: Observability panel — system-wide stats for debugging at 3 AM.
+    Protected by X-Admin-Secret header (same secret as /api/admin/refresh).
     Shows job health, pipeline throughput, cost totals, and error rates.
     """
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not hmac.compare_digest(secret, settings.admin_secret):
+        raise HTTPException(status_code=403, detail="Forbidden")
     # Job counts by status
     job_rows = (await db.execute(
         select(IngestionJob.status, func.count().label("cnt"))
