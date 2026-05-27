@@ -17,7 +17,7 @@ redis==5.2.1
 
 # --- LLM providers ---
 groq==0.13.0                # default: Llama 3.1 for analysis
-google-generativeai==0.8.3  # embeddings (text-embedding-004)
+google-genai==1.16.0        # embeddings via v1 API (text-embedding-004)
 
 # --- Auth (verify Supabase JWTs) ---
 pyjwt[crypto]==2.10.1

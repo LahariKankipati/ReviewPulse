@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-import google.generativeai as genai
+from google import genai as google_genai
 from groq import Groq
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 
@@ -88,39 +88,6 @@ class GroqProvider:
 @dataclass
 class GeminiProvider:
     provider_name: str = "gemini"
-    model: str = settings.llm_model_gemini
-
-    def __post_init__(self) -> None:
-        if settings.gemini_api_key:
-            genai.configure(api_key=settings.gemini_api_key)
-
-    @retry(
-        retry=retry_if_exception_type(Exception),
-        wait=wait_exponential_jitter(initial=1, max=8),
-        stop=stop_after_attempt(3),
-        reraise=True,
-    )
-    def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
-        if not settings.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is not configured")
-
-        model = genai.GenerativeModel(self.model)
-        prompt = f"{ANALYSIS_PROMPT}\nTitle: {review_title}\nBody: {review_body}"
-        response = model.generate_content(prompt)
-
-        text = getattr(response, "text", "") or ""
-        parsed = _extract_json(text)
-        usage_meta = getattr(response, "usage_metadata", None)
-        tokens_in = int(getattr(usage_meta, "prompt_token_count", 0) or 0)
-        tokens_out = int(getattr(usage_meta, "candidates_token_count", 0) or 0)
-
-        cost = round((tokens_in * 0.00000015) + (tokens_out * 0.00000030), 8)
-        return AnalyzeReviewResponse(
-            provider=self.provider_name,
-            model=self.model,
-            result=ReviewAnalysisResult.model_validate(parsed),
-            usage=AnalysisUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
-        )
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -132,7 +99,11 @@ class GeminiProvider:
         if not settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is not configured")
 
-        emb = genai.embed_content(model="models/embedding-001", content=text)
-        vector = emb["embedding"] if isinstance(emb, dict) else emb.embedding
+        client = google_genai.Client(api_key=settings.gemini_api_key)
+        result = client.models.embed_content(model="text-embedding-004", contents=text)
+        vector = result.embeddings[0].values
 
-        return EmbedResponse(provider=self.provider_name, model="embedding-001", vector=vector)
+        return EmbedResponse(provider=self.provider_name, model="text-embedding-004", vector=vector)
+
+    def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
+        raise NotImplementedError("Use GroqProvider for analysis")
