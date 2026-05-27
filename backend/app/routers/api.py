@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 from collections import defaultdict
 
-from sqlalchemy import Select, and_, select, text
+from sqlalchemy import Select, and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -540,3 +540,88 @@ async def admin_refresh_all(
         jobs_out.append({"job_id": job.id, "book_id": book.id, "author_id": book.author_id})
 
     return {"triggered": len(jobs_out), "batch_date": batch_date, "jobs": jobs_out}
+
+
+@router.get("/metrics")
+async def get_metrics(db: AsyncSession = Depends(get_db)):
+    """N12: Observability panel — system-wide stats for debugging at 3 AM.
+    Shows job health, pipeline throughput, cost totals, and error rates.
+    """
+    # Job counts by status
+    job_rows = (await db.execute(
+        select(IngestionJob.status, func.count().label("cnt"))
+        .group_by(IngestionJob.status)
+    )).all()
+    jobs_by_status = {row.status.value: row.cnt for row in job_rows}
+
+    # Total jobs and error rate
+    total_jobs = sum(jobs_by_status.values())
+    failed_jobs = jobs_by_status.get("failed", 0) + jobs_by_status.get("partial", 0)
+    error_rate_pct = round((failed_jobs / total_jobs * 100), 1) if total_jobs else 0.0
+
+    # Pipeline throughput
+    total_reviews = await db.scalar(select(func.count()).select_from(Review)) or 0
+    total_analyzed = await db.scalar(select(func.count()).select_from(ReviewAnalysis)) or 0
+    total_embeddings = await db.scalar(select(func.count()).select_from(ReviewEmbedding)) or 0
+
+    # Cost totals
+    total_cost = await db.scalar(select(func.sum(ReviewAnalysis.cost_usd))) or 0.0
+    total_tokens_in = await db.scalar(select(func.sum(ReviewAnalysis.tokens_in))) or 0
+    total_tokens_out = await db.scalar(select(func.sum(ReviewAnalysis.tokens_out))) or 0
+
+    # Per-author cost breakdown
+    author_cost_rows = (await db.execute(
+        select(Author.email, func.count(Review.id).label("reviews"),
+               func.sum(ReviewAnalysis.cost_usd).label("cost"))
+        .join(Review, Review.author_id == Author.id)
+        .join(ReviewAnalysis, ReviewAnalysis.review_id == Review.id)
+        .group_by(Author.id, Author.email)
+        .order_by(func.sum(ReviewAnalysis.cost_usd).desc())
+    )).all()
+
+    # Recent failed jobs for debugging
+    recent_failures = (await db.execute(
+        select(IngestionJob)
+        .where(IngestionJob.status.in_(["failed", "partial"]))
+        .order_by(IngestionJob.finished_at.desc().nullslast())
+        .limit(5)
+    )).scalars().all()
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "jobs": {
+            "total": total_jobs,
+            "by_status": jobs_by_status,
+            "error_rate_pct": error_rate_pct,
+        },
+        "pipeline": {
+            "total_reviews": total_reviews,
+            "total_analyzed": total_analyzed,
+            "total_embeddings": total_embeddings,
+            "analysis_coverage_pct": round(total_analyzed / total_reviews * 100, 1) if total_reviews else 0.0,
+        },
+        "cost": {
+            "total_usd": round(float(total_cost), 6),
+            "total_tokens_in": total_tokens_in,
+            "total_tokens_out": total_tokens_out,
+            "per_author": [
+                {
+                    "email": row.email,
+                    "reviews": row.reviews,
+                    "cost_usd": round(float(row.cost or 0), 6),
+                }
+                for row in author_cost_rows
+            ],
+        },
+        "recent_failures": [
+            {
+                "job_id": j.id,
+                "book_id": j.book_id,
+                "status": j.status.value,
+                "failed": j.failed,
+                "error": j.error,
+                "finished_at": j.finished_at.isoformat() if j.finished_at else None,
+            }
+            for j in recent_failures
+        ],
+    }
