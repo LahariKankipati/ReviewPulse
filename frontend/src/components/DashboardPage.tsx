@@ -84,6 +84,8 @@ function NewSinceLogin({ books, bookReviews, lastLoginAt }: {
     .filter(({ newRevs }) => newRevs.length > 0);
 
   const totalNew = byBook.reduce((s, { newRevs }) => s + newRevs.length, 0);
+  const totalPos = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.sentiment === "positive").length, 0);
+  const totalMix = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.sentiment === "mixed").length, 0);
   const totalNeg = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.sentiment === "negative").length, 0);
   const totalAction = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.actionable).length, 0);
   const totalAI = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.ai_generated_flag).length, 0);
@@ -117,6 +119,20 @@ function NewSinceLogin({ books, bookReviews, lastLoginAt }: {
           <span className="nsc-val">{totalNew}</span>
           <span className="nsc-label">total</span>
         </div>
+        {totalPos > 0 && (
+          <div className="new-since-count-item">
+            <div className="nsc-dot" style={{ background: "#4ade80" }} />
+            <span className="nsc-val">{totalPos}</span>
+            <span className="nsc-label">positive</span>
+          </div>
+        )}
+        {totalMix > 0 && (
+          <div className="new-since-count-item">
+            <div className="nsc-dot" style={{ background: "#fcd34d" }} />
+            <span className="nsc-val">{totalMix}</span>
+            <span className="nsc-label">mixed</span>
+          </div>
+        )}
         {totalNeg > 0 && (
           <div className="new-since-count-item">
             <div className="nsc-dot" style={{ background: "#f87171" }} />
