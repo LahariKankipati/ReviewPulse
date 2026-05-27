@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Comma-separated CORS origins and webhook signing secret.
     cors_origins: str = "http://localhost:5173"
     webhook_secret: str = "dev-webhook-hmac-secret"
+    # Optional URL to call when an ingestion job completes.
+    # If empty, webhook is skipped silently.
+    webhook_url: str = ""
     environment: str = "development"
 
 

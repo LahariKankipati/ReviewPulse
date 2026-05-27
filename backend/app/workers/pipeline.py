@@ -2,13 +2,21 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.llm.service import analyze_review, embed_text
+from app.logging_config import get_logger
+
+logger = get_logger("reviewpulse.pipeline")
+settings = get_settings()
 from app.models import (
     Book,
     IngestionJob,
@@ -35,6 +43,48 @@ def _review_hash(book_key: str, external_id: str, body: str) -> str:
     normalized = " ".join(body.lower().split())
     raw = f"{book_key}|{external_id}|{normalized}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _fire_webhook(job: "IngestionJob") -> None:
+    """POST signed job-completion payload to WEBHOOK_URL if configured.
+
+    Signature scheme: HMAC-SHA256 over the raw JSON body, hex-encoded.
+    Header: X-ReviewPulse-Signature: sha256=<hex>
+
+    Receiver verification (Python example):
+        import hmac, hashlib
+        expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        assert hmac.compare_digest(f"sha256={expected}", request.headers["X-ReviewPulse-Signature"])
+    """
+    if not settings.webhook_url:
+        return
+
+    payload = {
+        "event": "ingestion.completed",
+        "job_id": job.id,
+        "author_id": job.author_id,
+        "book_id": job.book_id,
+        "status": job.status.value,
+        "analyzed": job.analyzed,
+        "failed": job.failed,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    sig = hmac.new(settings.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+
+    try:
+        resp = httpx.post(
+            settings.webhook_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-ReviewPulse-Signature": f"sha256={sig}",
+            },
+            timeout=10,
+        )
+        logger.info("webhook_fired", extra={"url": settings.webhook_url, "status": resp.status_code})
+    except Exception as exc:
+        logger.warning("webhook_failed", extra={"url": settings.webhook_url, "error": str(exc)})
 
 
 async def enqueue_ingestion_job(*, db: AsyncSession, author_id: str, book_id: str) -> IngestionJob:
@@ -154,4 +204,5 @@ async def process_ingestion_job(
     job.status = JobStatus.PARTIAL if failed_count > 0 else JobStatus.COMPLETED
     await db.commit()
     await db.refresh(job)
+    _fire_webhook(job)
     return job
