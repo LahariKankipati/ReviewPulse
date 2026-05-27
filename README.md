@@ -29,7 +29,7 @@ Built for the Tweeds full-stack take-home. Stack deliberately matches Tweeds (Fa
 
 ## What doesn't work / honest cuts
 
-- **Auth (N11) — demo mode only:** session is email-based; `author_id` is returned by the server on login and stored in `localStorage`. There is no JWT — `author_id` is passed as a path/query param and trusted by the API. The query isolation is correct, but a determined caller could query another author's data by guessing their UUID. Production fix: Supabase Auth JWT middleware + derive `author_id` from the verified token, never from input (~2h add).
+- **Auth (N11) — demo mode only:** session is email-based; `author_id` is returned by the server on login and stored in `localStorage`. There is no JWT — `author_id` is passed as a path/query param and trusted by the API. The query isolation is correct, but a caller who already has another author's UUID — from shared logs, an observed network request, or a compromised session — could query their data. Production fix: Supabase Auth JWT middleware + derive `author_id` from the verified token, never from input (~2h add).
 - **Real Amazon scraping:** synthetic mode only. The pipeline is source-agnostic — swapping the synthetic generator for a real scraper requires changing one function.
 - **GeminiProvider:** a documented stub that raises `NotImplementedError`. Satisfies the N2 two-implementation requirement. Groq is the active analysis provider; Jina is the active embedding provider.
 - **Why Groq + Jina instead of Anthropic/Gemini:** the spec suggests Anthropic, Gemini, or OpenAI, but all three hit quota errors on free tiers without a payment method attached. Groq's free tier (llama-3.1-8b-instant) has no hard quota wall and supports JSON-mode output, which the analysis pipeline requires. Jina AI's free embedding tier (jina-embeddings-v2-base-en) similarly has no payment barrier and produces 768-dim vectors compatible with pgvector. Both are drop-in swappable via the provider adapter — changing two lines in `app/llm/service.py` would switch to Anthropic + OpenAI embeddings if billing is set up.
@@ -81,7 +81,7 @@ Where it went wrong and was overridden: the initial provider setup had `GroqProv
 ### 1. Clone and set up the backend
 
 ```bash
-git clone https://github.com/LahariKankipati/reviewpulse
+git clone https://github.com/LahariKankipati/ReviewPulse
 cd reviewpulse/backend
 
 python -m venv .venv && source .venv/bin/activate
