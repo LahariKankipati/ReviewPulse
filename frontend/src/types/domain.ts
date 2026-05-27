@@ -51,6 +51,7 @@ export type ReviewAnalysis = {
 
 export type ReviewItem = {
   review_id: string;
+  book_id: string;
   title?: string;
   body: string;
   rating?: number;

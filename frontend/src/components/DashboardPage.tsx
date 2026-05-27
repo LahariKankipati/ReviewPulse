@@ -66,25 +66,29 @@ function SentimentBar({ pos, mix, neg, height = 6 }: { pos: number; mix: number;
 }
 
 /* ── New Since Login section ─────────── */
-function NewSinceLogin({ reviews, lastLoginAt, books }: {
-  reviews: ReviewItem[];
-  lastLoginAt: string | null;
+function NewSinceLogin({ books, bookReviews, lastLoginAt }: {
   books: Book[];
+  bookReviews: Record<string, ReviewItem[]>;
+  lastLoginAt: string | null;
 }) {
-  const bookMap = Object.fromEntries(books.map((b) => [b.id, b]));
   const cutoff = lastLoginAt ? new Date(lastLoginAt) : null;
 
-  // Use review_date against cutoff, or fall back to showing "recent" synthetics
-  const newRevs = cutoff
-    ? reviews.filter((r) => r.review_date && new Date(r.review_date) > cutoff)
-    : [];
+  // Group new reviews per book
+  const byBook = books
+    .map((book) => ({
+      book,
+      newRevs: cutoff
+        ? (bookReviews[book.id] ?? []).filter((r) => r.review_date && new Date(r.review_date) > cutoff)
+        : [],
+    }))
+    .filter(({ newRevs }) => newRevs.length > 0);
 
-  // Count by type
-  const neg = newRevs.filter((r) => r.analysis?.sentiment === "negative");
-  const actionable = newRevs.filter((r) => r.analysis?.actionable);
-  const ai = newRevs.filter((r) => r.analysis?.ai_generated_flag);
+  const totalNew = byBook.reduce((s, { newRevs }) => s + newRevs.length, 0);
+  const totalNeg = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.sentiment === "negative").length, 0);
+  const totalAction = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.actionable).length, 0);
+  const totalAI = byBook.reduce((s, { newRevs }) => s + newRevs.filter((r) => r.analysis?.ai_generated_flag).length, 0);
 
-  if (!cutoff || newRevs.length === 0) {
+  if (!cutoff || totalNew === 0) {
     return (
       <div className="new-since-wrap" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
         <span style={{ fontSize: "1.2rem" }}>✓</span>
@@ -100,76 +104,83 @@ function NewSinceLogin({ reviews, lastLoginAt, books }: {
     );
   }
 
-  // Show at most 6 cards, prioritise negative + actionable
-  const priority = [
-    ...neg.slice(0, 2),
-    ...actionable.filter((r) => !neg.includes(r)).slice(0, 2),
-    ...newRevs.filter((r) => !neg.includes(r) && !actionable.includes(r)).slice(0, 2),
-  ].slice(0, 6);
-
   return (
     <div className="new-since-wrap">
       <div className="new-since-kicker">New since {formatDate(lastLoginAt)}</div>
       <div className="new-since-head">
-        {newRevs.length} new review{newRevs.length !== 1 ? "s" : ""} arrived while you were away
+        {totalNew} new review{totalNew !== 1 ? "s" : ""} arrived while you were away
       </div>
 
       <div className="new-since-counts">
         <div className="new-since-count-item">
           <div className="nsc-dot" style={{ background: "#6ee7b7" }} />
-          <span className="nsc-val">{newRevs.length}</span>
+          <span className="nsc-val">{totalNew}</span>
           <span className="nsc-label">total</span>
         </div>
-        {neg.length > 0 && (
+        {totalNeg > 0 && (
           <div className="new-since-count-item">
             <div className="nsc-dot" style={{ background: "#f87171" }} />
-            <span className="nsc-val">{neg.length}</span>
+            <span className="nsc-val">{totalNeg}</span>
             <span className="nsc-label">negative</span>
           </div>
         )}
-        {actionable.length > 0 && (
+        {totalAction > 0 && (
           <div className="new-since-count-item">
             <div className="nsc-dot" style={{ background: "#fcd34d" }} />
-            <span className="nsc-val">{actionable.length}</span>
+            <span className="nsc-val">{totalAction}</span>
             <span className="nsc-label">actionable</span>
           </div>
         )}
-        {ai.length > 0 && (
+        {totalAI > 0 && (
           <div className="new-since-count-item">
             <div className="nsc-dot" style={{ background: "#93c5fd" }} />
-            <span className="nsc-val">{ai.length}</span>
+            <span className="nsc-val">{totalAI}</span>
             <span className="nsc-label">likely AI</span>
           </div>
         )}
       </div>
 
-      <div className="new-since-reviews">
-        {priority.map((r) => {
-          const isNeg = r.analysis?.sentiment === "negative";
-          const isAction = r.analysis?.actionable;
-          const cls = isNeg ? "nsc-negative" : isAction ? "nsc-actionable" : "nsc-positive";
-          const bookTitle = Object.values(bookMap).find((b) =>
-            (r as ReviewItem & { book_id?: string }).book_id === b.id
-          )?.title;
-          return (
-            <div key={r.review_id} className={`new-since-card ${cls}`}>
-              <div className="new-since-card-title">{r.title || "Untitled review"}</div>
-              <div className="new-since-card-body">
-                {r.analysis?.summary || r.body.slice(0, 120)}
-              </div>
-              <div className="new-since-card-foot">
-                {r.analysis?.sentiment && (
-                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: isNeg ? "#f87171" : isAction ? "#fcd34d" : "#6ee7b7", textTransform: "capitalize" }}>
-                    {r.analysis.sentiment}
-                  </span>
-                )}
-                {isAction && <span style={{ fontSize: "0.72rem", color: "#fcd34d" }}>⚡ actionable</span>}
-                {bookTitle && <span style={{ fontSize: "0.7rem", color: "#57534e" }}>{bookTitle}</span>}
-              </div>
+      {/* Per-book sections */}
+      {byBook.map(({ book, newRevs }) => {
+        const neg = newRevs.filter((r) => r.analysis?.sentiment === "negative");
+        const actionable = newRevs.filter((r) => r.analysis?.actionable);
+        const priority = [
+          ...neg.slice(0, 2),
+          ...actionable.filter((r) => !neg.includes(r)).slice(0, 1),
+          ...newRevs.filter((r) => !neg.includes(r) && !actionable.includes(r)).slice(0, 2),
+        ].slice(0, 3);
+
+        return (
+          <div key={book.id} style={{ marginTop: "1.1rem" }}>
+            <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#a8a29e", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+              {book.title} · {newRevs.length} new
             </div>
-          );
-        })}
-      </div>
+            <div className="new-since-reviews">
+              {priority.map((r) => {
+                const isNeg = r.analysis?.sentiment === "negative";
+                const isAction = r.analysis?.actionable;
+                const cls = isNeg ? "nsc-negative" : isAction ? "nsc-actionable" : "nsc-positive";
+                return (
+                  <div key={r.review_id} className={`new-since-card ${cls}`}>
+                    <div className="new-since-card-title">{r.title || "Untitled review"}</div>
+                    <div className="new-since-card-body">
+                      {r.analysis?.summary || r.body.slice(0, 120)}
+                    </div>
+                    <div className="new-since-card-foot">
+                      {r.analysis?.sentiment && (
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: isNeg ? "#f87171" : isAction ? "#fcd34d" : "#6ee7b7", textTransform: "capitalize" }}>
+                          {r.analysis.sentiment}
+                        </span>
+                      )}
+                      {isAction && <span style={{ fontSize: "0.72rem", color: "#fcd34d" }}>⚡ actionable</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -355,9 +366,9 @@ export function DashboardPage({ session, books, bookReviews, loading, onSelectBo
       {/* New since login — always first */}
       {allReviews.length > 0 && (
         <NewSinceLogin
-          reviews={allReviews}
-          lastLoginAt={session.last_login_at}
           books={books}
+          bookReviews={bookReviews}
+          lastLoginAt={session.last_login_at}
         />
       )}
 

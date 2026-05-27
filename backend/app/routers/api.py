@@ -74,7 +74,7 @@ def _build_synthetic_reviews(count: int) -> list[IngestReviewInput]:
                 rating=random.choice([1, 2, 3, 4, 5]),
                 title=f"Synthetic review {i}",
                 body=random.choice(snippets),
-                review_date=now - timedelta(hours=random.randint(0, 72)),
+                review_date=now - timedelta(days=random.randint(0, 45), hours=random.randint(0, 23)),
                 source="synthetic",
             )
         )
@@ -268,6 +268,7 @@ async def list_reviews(
         out.append(
             {
                 "review_id": review.id,
+                "book_id": review.book_id,
                 "external_id": review.external_id,
                 "rating": review.rating,
                 "title": review.title,
