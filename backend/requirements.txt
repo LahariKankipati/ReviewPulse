@@ -15,9 +15,9 @@ pgvector==0.3.6            # SQLAlchemy type for the `vector` column
 celery==5.4.0
 redis==5.2.1
 
-# --- LLM providers (provider-agnostic adapter sits on top of these) ---
-anthropic==0.42.0
-google-generativeai==0.8.3
+# --- LLM providers ---
+groq==0.13.0                # default: Llama 3.1 for analysis
+google-generativeai==0.8.3  # embeddings (text-embedding-004)
 
 # --- Auth (verify Supabase JWTs) ---
 pyjwt[crypto]==2.10.1

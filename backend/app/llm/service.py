@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from app.config import get_settings
 from app.llm.base import LLMProvider
-from app.llm.providers import AnthropicProvider, GeminiProvider
+from app.llm.providers import GeminiProvider, GroqProvider
 from app.llm.schemas import AnalyzeReviewResponse, EmbedResponse
 from app.logging_config import get_logger
 
@@ -13,10 +13,10 @@ settings = get_settings()
 
 def get_provider(name: str | None = None) -> LLMProvider:
     selected = (name or settings.llm_provider).lower().strip()
+    if selected == "groq":
+        return GroqProvider()
     if selected == "gemini":
         return GeminiProvider()
-    if selected == "anthropic":
-        return AnthropicProvider()
     raise ValueError(f"Unsupported provider: {selected}")
 
 

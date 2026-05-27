@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # LLM provider defaults.
-    llm_provider: str = "gemini"          # "anthropic" | "gemini"
-    anthropic_api_key: str = ""
-    gemini_api_key: str = ""
-    llm_model_anthropic: str = "claude-3-5-haiku-20241022"
+    llm_provider: str = "groq"            # "groq" (default) | "gemini"
+    groq_api_key: str = ""
+    gemini_api_key: str = ""              # used for embeddings regardless of llm_provider
+    llm_model_groq: str = "llama-3.1-8b-instant"
     llm_model_gemini: str = "gemini-2.0-flash"
     embedding_model: str = "gemini-embedding"
     embedding_dim: int = 768

@@ -1,11 +1,11 @@
-"""Gemini and Anthropic provider implementations."""
+"""Groq (default) and Gemini provider implementations."""
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 
-import anthropic
 import google.generativeai as genai
+from groq import Groq
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 
 from app.config import get_settings
@@ -29,13 +29,47 @@ def _extract_json(text: str) -> dict:
     return json.loads(text[start : end + 1])
 
 
-def _estimate_cost_usd(*, provider: str, model: str, tokens_in: int, tokens_out: int) -> float:
-    pricing = {
-        "gemini": {"in": 0.00000015, "out": 0.00000030},
-        "anthropic": {"in": 0.00000080, "out": 0.00000400},
-    }
-    rate = pricing.get(provider, {"in": 0.0, "out": 0.0})
-    return round((tokens_in * rate["in"]) + (tokens_out * rate["out"]), 8)
+@dataclass
+class GroqProvider:
+    provider_name: str = "groq"
+    model: str = settings.llm_model_groq
+
+    @retry(
+        retry=retry_if_exception_type(Exception),
+        wait=wait_exponential_jitter(initial=1, max=8),
+        stop=stop_after_attempt(3),
+        reraise=True,
+    )
+    def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
+        if not settings.groq_api_key:
+            raise ValueError("GROQ_API_KEY is not configured")
+
+        client = Groq(api_key=settings.groq_api_key)
+        prompt = f"{ANALYSIS_PROMPT}\nTitle: {review_title}\nBody: {review_body}"
+        response = client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=700,
+            temperature=0,
+        )
+
+        text = response.choices[0].message.content or ""
+        parsed = _extract_json(text)
+
+        usage = response.usage
+        tokens_in = getattr(usage, "prompt_tokens", 0) or 0
+        tokens_out = getattr(usage, "completion_tokens", 0) or 0
+
+        return AnalyzeReviewResponse(
+            provider=self.provider_name,
+            model=self.model,
+            result=ReviewAnalysisResult.model_validate(parsed),
+            usage=AnalysisUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=0.0),
+        )
+
+    def embed_text(self, *, text: str) -> EmbedResponse:
+        # Groq has no embedding model — delegate to Gemini (separate quota from generate_content)
+        return GeminiProvider().embed_text(text=text)
 
 
 @dataclass
@@ -67,22 +101,12 @@ class GeminiProvider:
         tokens_in = int(getattr(usage_meta, "prompt_token_count", 0) or 0)
         tokens_out = int(getattr(usage_meta, "candidates_token_count", 0) or 0)
 
-        usage = AnalysisUsage(
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-            cost_usd=_estimate_cost_usd(
-                provider=self.provider_name,
-                model=self.model,
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-            ),
-        )
-
+        cost = round((tokens_in * 0.00000015) + (tokens_out * 0.00000030), 8)
         return AnalyzeReviewResponse(
             provider=self.provider_name,
             model=self.model,
             result=ReviewAnalysisResult.model_validate(parsed),
-            usage=usage,
+            usage=AnalysisUsage(tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
         )
 
     @retry(
@@ -99,57 +123,3 @@ class GeminiProvider:
         vector = emb["embedding"] if isinstance(emb, dict) else emb.embedding
 
         return EmbedResponse(provider=self.provider_name, model="text-embedding-004", vector=vector)
-
-
-@dataclass
-class AnthropicProvider:
-    provider_name: str = "anthropic"
-    model: str = settings.llm_model_anthropic
-
-    @retry(
-        retry=retry_if_exception_type(Exception),
-        wait=wait_exponential_jitter(initial=1, max=8),
-        stop=stop_after_attempt(3),
-        reraise=True,
-    )
-    def analyze_review(self, *, review_title: str, review_body: str) -> AnalyzeReviewResponse:
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY is not configured")
-
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        prompt = f"{ANALYSIS_PROMPT}\nTitle: {review_title}\nBody: {review_body}"
-        msg = client.messages.create(
-            model=self.model,
-            max_tokens=700,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        chunks = getattr(msg, "content", [])
-        text = "".join(getattr(c, "text", "") for c in chunks)
-        parsed = _extract_json(text)
-
-        usage_meta = getattr(msg, "usage", None)
-        tokens_in = int(getattr(usage_meta, "input_tokens", 0) or 0)
-        tokens_out = int(getattr(usage_meta, "output_tokens", 0) or 0)
-
-        usage = AnalysisUsage(
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-            cost_usd=_estimate_cost_usd(
-                provider=self.provider_name,
-                model=self.model,
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-            ),
-        )
-
-        return AnalyzeReviewResponse(
-            provider=self.provider_name,
-            model=self.model,
-            result=ReviewAnalysisResult.model_validate(parsed),
-            usage=usage,
-        )
-
-    def embed_text(self, *, text: str) -> EmbedResponse:
-        raise NotImplementedError("Anthropic embedding is not configured for this project")
